@@ -29,9 +29,6 @@ AJAX同源策略主要用来防止CSRF攻击。如果没有AJAX同源策略，�
 4. 银行页面从发送的cookie中提取用户标识，验证用户无误，response中返回请求数据。此时数据就泄露了。
 5. 而且由于Ajax在后台执行，用户无法感知这一过程。
 
-  
-
-
 DOM同源策略也一样，如果iframe之间可以跨域访问，可以这样攻击：
 
 1. 做一个假网站，里面用iframe嵌套一个银行网站 
@@ -57,7 +54,7 @@ header is present on the requested resource. Origin 'http://y.com' is therefore 
 你心里肯定会想，我难道要用后台做个爬虫来获取这个数据吗？！\(；°○° \)  
 为了避免这种蛋疼的事情发生，JSONP 就派上用场了。
 
-**`<script>`标签是不受同源策略的限制的，它可以载入任意地方的 JavaScript 文件，而并不要求同源。**
+`<script>`**标签是不受同源策略的限制的，它可以载入任意地方的 JavaScript 文件，而并不要求同源。**
 
 所以 JSONP 的理念就是，我和服务端约定好一个函数名，当我请求文件的时候，服务端返回一段 JavaScript。这段 JavaScript 调用了我们约定好的函数，并且将数据当做参数传入。  
 非常巧合的一点（其实并不是），JSON 的数据格式和 JavaScript 语言里对象的格式正好相同。所以在我们约定的函数里面可以直接使用这个对象。
@@ -71,4 +68,104 @@ JSONP的缺点则是：它只支持GET请求而不支持POST等其它类型的HT
 它只支持跨域HTTP请求这种情况，不能解决不同域的两个页面之间如何进行`JavaScript`调用的问题。
 
 安全问题，由于jsonp是通过脚本注入的方式，一旦注入源出现恶意代码就会导致被注入的页面遭受攻击。
+
+
+
+
+
+# 2. CORS 跨域资源共享 {#page-title}
+
+CORS是一个W3C标准，全称是"跨域资源共享"（Cross-origin resource sharing）。
+
+CORS（Cross-Origin Resource Sharing，跨域资源共享）是 W3C 的一个工作草案，定义了在必须访问跨源资源时，浏览器与服务器应该如何沟通。CORS 背后的的基本思想，就是使用自定义的 HTTP 头部让浏览器与服务器进行沟通，从而决定请求或响应的成功和失败。
+
+它允许浏览器向跨源服务器，发出[`XMLHttpRequest`](http://www.ruanyifeng.com/blog/2012/09/xmlhttprequest_level_2.html)请求，从而克服了AJAX只能[同源](http://www.ruanyifeng.com/blog/2016/04/same-origin-policy.html)使用的限制。
+
+### 访问控制场景: {#访问控制场景}
+
+#### 简单请求 {#简单请求}
+
+所谓的简单，是指：
+
+* 只使用 GET, HEAD 或者 POST 请求方法。如果使用 POST 向服务器端传送数据，则数据类型\(Content-Type\)只能是
+  `application/x-www-form-urlencoded`,`multipart/form-data`或`text/plain`中的一种
+* 不会使用自定义请求头（类似于 X-Modified 这种）
+
+下面是一个使用简单请求的例子:
+
+```
+$.ajax({
+   url: 'http://localhost:8002/listUsers',
+   method: 'GET',
+   success: function (data) {
+       p.innerHTML = JSON.stringify(data);
+       document.body.appendChild(p);
+   }
+});
+```
+
+Request Headers:
+
+```
+Accept:*/*
+Accept-Encoding:gzip, deflate, sdch, br
+Accept-Language:zh-CN,zh;q=0.8,en;q=0.6
+Cache-Control:no-cache
+Connection:keep-alive
+Host:localhost:8002
+Origin:http://localhost:63343
+Pragma:no-cache
+Referer:http://localhost:63343/JsPractice/src/js/ajax/json.html?_ijt=4f3ur0duo147k993set7na2733
+User-Agent:Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.98 Safari/537.36       
+
+```
+
+上面的头信息中，Origin 字段用来说明，本次请求来自哪个源（协议 + 域名 + 端口）。服务器根据这个值，决定是否同意这次请求。  
+如果 Origin 指定的源，不在许可范围内，服务器会返回一个正常的 HTTP 回应。浏览器发现，这个回应的头信息没有包含 Access-Control-Allow-Origin 字段，就知道出错了，从而抛出一个错误，被 XMLHttpRequest 的 onerror 回调函数捕获。
+
+这种错误无法通过状态码识别，因为 HTTP 回应的状态码有可能是200。
+
+
+
+如果Origin指定的域名在许可范围内，服务器返回的响应，会多出几个头信息字段。请看 Response Headers:
+
+```
+Access-Control-Allow-Origin:*
+Connection:keep-alive
+Content-Length:1138
+Content-Type:application/json; charset=utf-8
+Date:Sun, 20 Nov 2016 07:57:09 GMT
+X-Powered-By:Express
+```
+
+Access-Control-Allow-Origin 字段是必须的。它的值要么是请求时 Origin 字段的值，要么是一个 \*，表示接受任意域名的请求。
+
+
+
+#### 非简单请求\(预请求\) {#非简单请求-预请求}
+
+请求以 GET, HEAD 或者 POST 以外的方法发起请求。或者，使用 POST，但请求数据为
+
+* `application/x-www-form-urlencoded`,`multipart/form-data`或者`text/plain`以外的数据类型。比如说，用 POST 发送数据类型为`application/xml`或者`text/xml`的 XML 数据的请求。
+* 使用自定义请求头（比如添加诸如 X-PINGOTHER）
+
+不同于简单请求，“预请求”要求必须先发送一个 OPTIONS 请求给目的站点，来查明这个跨站请求对于目的站点是不是安全可接受的。
+
+## CORS和JSONP对比 {#articleHeader4}
+
+```
+1、 JSONP只能实现GET请求，而CORS支持所有类型的HTTP请求。
+
+2、 使用CORS，开发者可以使用普通的XMLHttpRequest发起请求和获得数据，比起JSONP有更好的错误处理。
+
+3、 JSONP主要被老的浏览器支持，它们往往不支持CORS，而绝大多数现代浏览器都已经支持了CORS）。
+```
+
+
+
+## 3.  通过修改document.domain来跨子域 {#articleHeader5}
+
+浏览器都有一个同源策略，其限制之一就是第一种方法中我们说的不能通过ajax的方法去请求不同源中的文档。 它的第二个限制是浏览器中不同域的框架之间是不能进行js的交互操作的。
+
+
 
