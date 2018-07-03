@@ -1,6 +1,5 @@
 # Summary
 
-* [Introduction](README.md)
-* [First Chapter](chapter1.md)
-* webfront knowledge
+* [介绍](README.md)
+* [js跨域整理](jskua-yu-zheng-li.md)
 
